@@ -9,13 +9,16 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from news_fetcher import NewsFetcher
 from rag.vector_store import NewsVectorStore
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, url_for
 from flask_cors import CORS
 
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__, template_folder='../templates')
+app = Flask(__name__, 
+            template_folder='../templates',
+            static_folder='../static',
+            static_url_path='/static')
 CORS(app)
 
 # Initialize components
@@ -105,4 +108,5 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(os.path.dirname(__file__), '../templates'), exist_ok=True)
     
     # Run the Flask app
+    print("Starting News Analysis API...")
     app.run(host='0.0.0.0', port=8000, debug=True) 
