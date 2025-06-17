@@ -19,8 +19,8 @@ A real-time news analysis system that fetches, processes, and analyzes news arti
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/news-analysis-system.git
-cd news-analysis-system
+git clone https://github.com/Navi-1105/news-analysis.git
+cd news-analysis
 ```
 
 2. Install dependencies:

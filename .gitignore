@@ -25,9 +25,13 @@ venv/
 env/
 ENV/
 
-# Environment Variables
+# Environment Variables and Secrets
 .env
 .env.*
+*.env
+secrets.json
+config.json
+credentials.json
 
 # IDE
 .idea/
