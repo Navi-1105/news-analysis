@@ -4,171 +4,108 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>News Analysis System</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link href="{{ url_for('static', filename='dist/output.css') }}" rel="stylesheet">
 </head>
 <body class="bg-gray-50 min-h-screen">
-    <!-- Loading Overlay -->
-    <div id="loading" class="loading-overlay hidden">
-        <div class="card">
-            <div class="loading-spinner mx-auto"></div>
-            <p class="loading-text mt-4 font-medium">Processing your request...</p>
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">News Analysis System</h1>
+            <p class="text-lg text-gray-600">Search and analyze the latest news articles</p>
+        </header>
+
+        <div class="max-w-3xl mx-auto">
+            <form id="searchForm" class="card mb-8">
+                <div class="mb-4">
+                    <label for="query" class="block text-sm font-medium text-gray-700 mb-2">Search Query</label>
+                    <input type="text" id="query" name="query" class="input" 
+                           placeholder="Enter your search query..." required>
+                </div>
+                <button type="submit" class="btn btn-primary w-full">
+                    Analyze News
+                </button>
+            </form>
+
+            <div id="results" class="space-y-6"></div>
         </div>
     </div>
 
-    <div class="container mx-auto px-4 py-8">
-        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">News Analysis System</h1>
-        
-        <!-- Search Form -->
-        <div class="card mb-8">
-            <form id="searchForm" class="space-y-6">
-                <div>
-                    <label for="query" class="block text-sm font-medium text-gray-700 mb-2">Enter your query</label>
-                    <input type="text" id="query" name="query" required
-                           class="input-field"
-                           placeholder="e.g., What's happening in technology?">
-                </div>
-                <div class="flex space-x-4">
-                    <button type="submit" class="btn-primary flex-1">
-                        Analyze News
-                    </button>
-                    <button type="button" id="refreshBtn" class="btn-secondary flex-1">
-                        Refresh News
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <!-- Results Section -->
-        <div id="results" class="card hidden">
-            <h2 class="text-2xl font-semibold mb-6 text-gray-800">Analysis Results</h2>
-            <div id="answer" class="prose mb-8"></div>
-            
-            <h3 class="text-xl font-semibold mb-4 text-gray-800">Relevant Articles</h3>
-            <div id="articles" class="space-y-6"></div>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-xl text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+            <p class="text-gray-700">Processing your request...</p>
         </div>
     </div>
 
     <script>
-        function showLoading() {
-            const loadingElement = document.getElementById('loading');
-            loadingElement.classList.remove('hidden');
-            loadingElement.style.display = 'flex';
-        }
+        const searchForm = document.getElementById('searchForm');
+        const resultsDiv = document.getElementById('results');
+        const loadingOverlay = document.getElementById('loadingOverlay');
 
-        function hideLoading() {
-            const loadingElement = document.getElementById('loading');
-            loadingElement.classList.add('hidden');
-            loadingElement.style.display = 'none';
-        }
-
-        function showResults() {
-            document.getElementById('results').classList.remove('hidden');
-        }
-
-        function hideResults() {
-            document.getElementById('results').classList.add('hidden');
-        }
-
-        function displayError(message) {
-            alert(message);
-            hideLoading();
-        }
-
-        async function refreshNews() {
+        searchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = document.getElementById('query').value;
+            
+            // Show loading overlay
+            loadingOverlay.classList.remove('hidden');
+            loadingOverlay.classList.add('flex');
+            
             try {
-                showLoading();
-                const response = await fetch('http://localhost:8000/refresh', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to refresh news');
-                }
-
-                const data = await response.json();
-                console.log(data.message);
-                alert(data.message);
-            } catch (error) {
-                console.error('Error:', error);
-                displayError(error.message || 'An error occurred while refreshing the news.');
-            } finally {
-                hideLoading();
-            }
-        }
-
-        async function analyzeNews(query) {
-            try {
-                showLoading();
-                const response = await fetch('http://localhost:8000/analyze', {
+                const response = await fetch('/analyze', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({ query }),
                 });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to analyze news');
-                }
-
+                
                 const data = await response.json();
                 
-                // Display the answer
-                document.getElementById('answer').textContent = data.answer;
+                if (data.error) {
+                    throw new Error(data.error);
+                }
                 
-                // Display relevant articles
-                const articlesContainer = document.getElementById('articles');
-                articlesContainer.innerHTML = '';
-                data.relevant_articles.forEach(article => {
-                    const articleElement = document.createElement('div');
-                    articleElement.className = 'article-card';
-                    articleElement.innerHTML = `
-                        <h4 class="text-lg font-semibold text-gray-800 mb-2">${article.title}</h4>
-                        ${article.description ? `<p class="text-gray-600 mb-4">${article.description}</p>` : ''}
-                        <div class="flex flex-col space-y-2 text-sm text-gray-500">
-                            <p class="flex items-center">
-                                <span class="font-medium mr-2">Source:</span>
-                                ${article.source}
+                // Clear previous results
+                resultsDiv.innerHTML = '';
+                
+                if (data.articles && data.articles.length > 0) {
+                    data.articles.forEach(article => {
+                        const articleCard = document.createElement('div');
+                        articleCard.className = 'card';
+                        articleCard.innerHTML = `
+                            <h2 class="text-xl font-semibold text-gray-900 mb-2">${article.title}</h2>
+                            <p class="text-sm text-gray-600 mb-4">
+                                ${article.source} • ${new Date(article.publishedAt).toLocaleDateString()}
                             </p>
-                            <p class="flex items-center">
-                                <span class="font-medium mr-2">Published:</span>
-                                ${new Date(article.published_at).toLocaleString()}
-                            </p>
+                            <p class="text-gray-700 mb-4">${article.description}</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-500">Relevance: ${(article.similarity * 100).toFixed(1)}%</span>
+                                <a href="${article.url}" target="_blank" class="btn btn-secondary">
+                                    Read More
+                                </a>
+                            </div>
+                        `;
+                        resultsDiv.appendChild(articleCard);
+                    });
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="card text-center">
+                            <p class="text-gray-700">No articles found matching your query.</p>
                         </div>
-                        <a href="${article.url}" target="_blank" 
-                           class="inline-block mt-4 text-blue-600 hover:text-blue-800 font-medium">
-                            Read more →
-                        </a>
                     `;
-                    articlesContainer.appendChild(articleElement);
-                });
-
-                showResults();
+                }
             } catch (error) {
-                console.error('Error:', error);
-                displayError(error.message || 'An error occurred while analyzing the news.');
+                resultsDiv.innerHTML = `
+                    <div class="card bg-red-50 border border-red-200">
+                        <p class="text-red-700">Error: ${error.message}</p>
+                    </div>
+                `;
             } finally {
-                hideLoading();
+                // Hide loading overlay
+                loadingOverlay.classList.add('hidden');
+                loadingOverlay.classList.remove('flex');
             }
-        }
-
-        // Event Listeners
-        document.getElementById('searchForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const query = document.getElementById('query').value;
-            analyzeNews(query);
         });
-
-        document.getElementById('refreshBtn').addEventListener('click', refreshNews);
-
-        // Initial news refresh when page loads
-        window.addEventListener('load', refreshNews);
     </script>
 </body>
 </html> 

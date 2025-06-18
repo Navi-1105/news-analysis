@@ -1,7 +1,7 @@
 import os
+import json
 from newsapi import NewsApiClient
 from datetime import datetime, timedelta
-import json
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 
@@ -15,7 +15,9 @@ class NewsFetcher:
         print(f"Using API key: {self.api_key[:8]}...{self.api_key[-4:]}")
         
         self.api = NewsApiClient(api_key=self.api_key)
-        self.articles_file = "articles.json"
+        # Set articles file path to be in the backend directory
+        self.articles_file = os.path.join(os.path.dirname(__file__), 'articles.json')
+        print(f"Articles will be saved to: {self.articles_file}")
         
         # Trusted news sources for better quality
         self.trusted_sources = [
@@ -53,10 +55,13 @@ class NewsFetcher:
                     from_param=start_date.strftime('%Y-%m-%d'),
                     to=end_date.strftime('%Y-%m-%d')
                 )
+                print(f"API Response for {category}: {headlines}")
                 
                 if headlines.get('status') == 'ok':
                     print(f"Found {len(headlines.get('articles', []))} {category} headlines")
                     all_articles.extend(self._process_articles(headlines.get('articles', [])))
+                else:
+                    print(f"Error in API response for {category}: {headlines.get('message', 'Unknown error')}")
             
             # Fetch everything with broader search
             print("\nFetching everything with broader search...")
@@ -80,10 +85,13 @@ class NewsFetcher:
                     to=end_date.strftime('%Y-%m-%d'),
                     sort_by='relevancy'
                 )
+                print(f"API Response for query '{query}': {everything}")
                 
                 if everything.get('status') == 'ok':
                     print(f"Found {len(everything.get('articles', []))} articles for query: {query}")
                     all_articles.extend(self._process_articles(everything.get('articles', [])))
+                else:
+                    print(f"Error in API response for query '{query}': {everything.get('message', 'Unknown error')}")
             
             # Remove duplicates based on URL
             unique_articles = {article['url']: article for article in all_articles}.values()
@@ -107,28 +115,26 @@ class NewsFetcher:
         processed = []
         for article in articles:
             # Skip articles without required fields
-            if not all(k in article for k in ['title', 'url', 'source']):
+            if not all(k in article for k in ['title', 'url']):
+                print(f"Skipping article due to missing required fields: {article.get('title', 'No title')}")
                 continue
                 
-            # Skip articles from untrusted sources
-            source_domain = article['source'].get('id', '').lower()
-            if not any(trusted in source_domain for trusted in self.trusted_sources):
-                continue
-            
             # Skip articles with very short content
-            if len(article.get('description', '')) < 50:
+            if len(article.get('description', '')) < 20:
+                print(f"Skipping article due to short description: {article.get('title', 'No title')}")
                 continue
             
             processed_article = {
                 'title': article['title'],
                 'description': article.get('description', ''),
                 'url': article['url'],
-                'source': article['source'].get('name', 'Unknown'),
+                'source': article.get('source', {}).get('name', 'Unknown'),
                 'published_at': article.get('publishedAt', datetime.now().isoformat()),
                 'content': article.get('content', ''),
                 'author': article.get('author', 'Unknown')
             }
             processed.append(processed_article)
+            print(f"Processed article: {processed_article['title']}")
         
         return processed
 

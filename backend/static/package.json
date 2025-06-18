@@ -1,0 +1,13 @@
+{
+  "name": "news-analysis-ui",
+  "version": "1.0.0",
+  "description": "News Analysis System UI",
+  "scripts": {
+    "build": "tailwindcss -i ./src/input.css -o ./dist/output.css",
+    "watch": "tailwindcss -i ./src/input.css -o ./dist/output.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.3.5",
+    "@tailwindcss/typography": "^0.5.10"
+  }
+} 

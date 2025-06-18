@@ -1,6 +1,6 @@
 import os
 import sys
-from dotenv import load_dotenv
+
 import traceback
 from pathlib import Path
 
@@ -8,12 +8,14 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from news_fetcher import NewsFetcher
-from rag.vector_store import NewsVectorStore
+from rag.vector_store import VectorStore
 from flask import Flask, request, jsonify, render_template, url_for
 from flask_cors import CORS
+import json
+from datetime import datetime
 
 # Load environment variables
-load_dotenv()
+
 
 app = Flask(__name__, 
             template_folder='../templates',
@@ -24,7 +26,7 @@ CORS(app)
 # Initialize components
 try:
     news_fetcher = NewsFetcher()
-    vector_store = NewsVectorStore()
+    vector_store = VectorStore()
     print("Successfully initialized NewsFetcher and VectorStore")
 except Exception as e:
     print(f"Error initializing components: {str(e)}")
@@ -44,59 +46,45 @@ def analyze_news():
         query = data.get('query')
         
         if not query:
-            return jsonify({'error': 'No query provided'}), 400
+            return jsonify({'error': 'Query is required'}), 400
             
-        print(f"Analyzing query: {query}")
+        # Search for relevant articles
+        results = vector_store.search(query)
         
-        # Get relevant articles from vector store
-        relevant_articles = vector_store.search(query)
-        print(f"Found {len(relevant_articles)} relevant articles")
-        
-        # Generate answer using the articles
-        answer = f"Based on the latest news, here's what I found about '{query}':\n\n"
-        
-        if not relevant_articles:
-            answer = "I couldn't find any recent news articles related to your query. Try refreshing the news database or using different search terms."
-        else:
-            # Group articles by source
-            articles_by_source = {}
-            for article in relevant_articles:
-                source = article['source']
-                if source not in articles_by_source:
-                    articles_by_source[source] = []
-                articles_by_source[source].append(article)
+        if not results:
+            return jsonify({'articles': []})
             
-            # Add summary for each source
-            for source, articles in articles_by_source.items():
-                answer += f"From {source}:\n"
-                for article in articles[:3]:  # Limit to top 3 articles per source
-                    answer += f"- {article['title']}\n"
-                answer += "\n"
+        # Format the results for the frontend
+        articles = []
+        for article, similarity in results:
+            articles.append({
+                'title': article['title'],
+                'description': article['description'],
+                'url': article['url'],
+                'source': article['source']['name'],
+                'publishedAt': article['publishedAt'],
+                'similarity': float(similarity)  # Convert numpy float to Python float
+            })
             
-            answer += "These are the most relevant recent developments. You can click on any article to read more details."
-        
-        return jsonify({
-            'answer': answer,
-            'relevant_articles': relevant_articles
-        })
+        return jsonify({'articles': articles})
         
     except Exception as e:
         print(f"Error in analyze_news: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/refresh', methods=['GET', 'POST'])
+@app.route('/refresh', methods=['POST'])
 def refresh_news():
     """Refresh the news database."""
     try:
-        print("Refreshing news database...")
+        # Fetch new articles
         articles = news_fetcher.fetch_news()
-        print(f"Fetched {len(articles)} articles")
         
-        vector_store.update_articles(articles)
-        print("Vector store updated successfully")
+        # Update vector store
+        vector_store.update(articles)
         
         return jsonify({
-            'message': f'Successfully refreshed news database with {len(articles)} articles'
+            'message': f'Successfully refreshed {len(articles)} articles',
+            'count': len(articles)
         })
         
     except Exception as e:

@@ -7,18 +7,111 @@ import math
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+import traceback
 
-class NewsVectorStore:
-    def __init__(self, articles_file: str = "articles.json"):
-        self.articles_file = articles_file
+# Download required NLTK data
+nltk.download('punkt')
+nltk.download('stopwords')
+
+class VectorStore:
+    def __init__(self):
+        """Initialize the vector store."""
+        print("Initializing VectorStore...")
+        
+        # Initialize NLTK
+        nltk.download('punkt')
+        nltk.download('stopwords')
+        
+        # Load articles from file
         self.articles = []
-        self.word_frequencies = {}
+        self.vectors = None
         self.vectorizer = TfidfVectorizer(
             stop_words='english',
-            ngram_range=(1, 2),  # Use both unigrams and bigrams
-            max_features=5000
+            max_features=1000,
+            ngram_range=(1, 2)
         )
-        self.load_articles()
+        
+        # Try to load articles from file
+        articles_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'articles.json')
+        print(f"Looking for articles file at: {articles_file}")
+        
+        try:
+            if os.path.exists(articles_file):
+                print("Found articles file, loading...")
+                with open(articles_file, 'r', encoding='utf-8') as f:
+                    self.articles = json.load(f)
+                print(f"Loaded {len(self.articles)} articles from file")
+                
+                if self.articles:
+                    # Create vectors for loaded articles
+                   
+                    texts = [f"{article['title']} {article.get('description', article.get('content', ''))}" for article in self.articles]
+
+                    self.vectors = self.vectorizer.fit_transform(texts)
+                    print(f"Created vectors for {len(self.articles)} articles")
+                else:
+                    print("No articles to vectorize")
+            else:
+                print("No articles file found")
+        except Exception as e:
+            print(f"Error loading articles: {str(e)}")
+            print(f"Error details: {traceback.format_exc()}")
+            self.articles = []
+            self.vectors = None
+        
+    def update(self, new_articles):
+        """Update the vector store with new articles."""
+        print(f"Updating vector store with {len(new_articles)} new articles")
+        self.articles = new_articles
+
+        # Create vectors for the new articles
+        if self.articles:
+            texts = [f"{article['title']} {article['description']}" for article in self.articles]
+            self.vectors = self.vectorizer.fit_transform(texts)
+            print(f"Created vectors for {len(self.articles)} articles")
+        else:
+            self.vectors = None
+            print("No articles to vectorize")
+
+        # Save articles to file
+        try:
+            articles_file = os.path.join(os.path.dirname(__file__), '..', 'articles.json')
+            with open(articles_file, 'w', encoding='utf-8') as f:
+                json.dump(self.articles, f, ensure_ascii=False, indent=2)
+            print(f"Saved {len(self.articles)} articles to file")
+        except Exception as e:
+            print(f"Error saving articles: {str(e)}")
+            print(f"Full error details: {e.__class__.__name__}")
+            
+    def search(self, query, top_k=10):
+        """Search for relevant articles using TF-IDF and cosine similarity."""
+        print(f"Searching for: {query}")
+        if not self.articles or self.vectors is None:
+            print("No articles available for search")
+            return []
+            
+        # Transform query to TF-IDF vector
+        query_vector = self.vectorizer.transform([query])
+        print("Transformed query to vector")
+        
+        # Calculate cosine similarity
+        similarities = cosine_similarity(query_vector, self.vectors).flatten()
+        print(f"Calculated similarities, max similarity: {similarities.max()}")
+        
+        # Get top k results
+        top_indices = similarities.argsort()[-top_k:][::-1]
+        
+        # Return articles with their similarity scores
+        results = []
+        for idx in top_indices:
+            if similarities[idx] > 0:  # Only include articles with some relevance
+                results.append((self.articles[idx], float(similarities[idx])))
+                
+        print(f"Found {len(results)} relevant articles")
+        return results
 
     def preprocess_text(self, text: str) -> str:
         """Clean and preprocess text for better matching."""
@@ -28,32 +121,6 @@ class NewsVectorStore:
         text = re.sub(r'[^\w\s]', ' ', text)
         text = re.sub(r'\s+', ' ', text).strip()
         return text
-
-    def load_articles(self) -> None:
-        """Load articles from JSON file and prepare for search."""
-        try:
-            if os.path.exists(self.articles_file):
-                with open(self.articles_file, 'r', encoding='utf-8') as f:
-                    self.articles = json.load(f)
-                print(f"Loaded {len(self.articles)} articles from {self.articles_file}")
-                
-                # Preprocess all article texts
-                processed_texts = []
-                for article in self.articles:
-                    # Combine title and description for better matching
-                    text = f"{article['title']} {article.get('description', '')}"
-                    processed_text = self.preprocess_text(text)
-                    processed_texts.append(processed_text)
-                
-                # Fit vectorizer on all processed texts
-                if processed_texts:
-                    self.vectorizer.fit(processed_texts)
-            else:
-                print(f"No articles file found at {self.articles_file}")
-                self.articles = []
-        except Exception as e:
-            print(f"Error loading articles: {str(e)}")
-            self.articles = []
 
     def _tokenize(self, text: str) -> List[str]:
         """Simple tokenization of text"""
@@ -103,56 +170,20 @@ class NewsVectorStore:
             
         return dot_product / (query_magnitude * article_magnitude)
 
-    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
-        """Search for relevant articles using TF-IDF and cosine similarity."""
-        if not self.articles:
-            return []
-
-        try:
-            # Preprocess query
-            processed_query = self.preprocess_text(query)
-            
-            # Transform query and articles
-            query_vector = self.vectorizer.transform([processed_query])
-            article_vectors = self.vectorizer.transform([
-                self.preprocess_text(f"{article['title']} {article.get('description', '')}")
-                for article in self.articles
-            ])
-            
-            # Calculate similarities
-            similarities = cosine_similarity(query_vector, article_vectors).flatten()
-            
-            # Get top k results
-            top_indices = similarities.argsort()[-top_k:][::-1]
-            
-            # Filter out very low similarity scores
-            results = []
-            for idx in top_indices:
-                similarity = float(similarities[idx])  # Convert to float for JSON serialization
-                if similarity > 0.1:  # Only include results with similarity > 0.1
-                    article = self.articles[idx].copy()
-                    article['similarity'] = similarity
-                    results.append(article)
-            
-            return results
-        except Exception as e:
-            print(f"Error during search: {str(e)}")
-            return []
-
     def add_articles(self, new_articles: List[Dict[str, Any]]) -> None:
         """Add new articles to the store."""
         try:
             # Load existing articles
             existing_articles = []
-            if os.path.exists(self.articles_file):
-                with open(self.articles_file, 'r', encoding='utf-8') as f:
+            if os.path.exists(os.path.join(os.path.dirname(__file__), '..', 'articles.json')):
+                with open(os.path.join(os.path.dirname(__file__), '..', 'articles.json'), 'r', encoding='utf-8') as f:
                     existing_articles = json.load(f)
             
             # Add new articles
             all_articles = existing_articles + new_articles
             
             # Save updated articles
-            with open(self.articles_file, 'w', encoding='utf-8') as f:
+            with open(os.path.join(os.path.dirname(__file__), '..', 'articles.json'), 'w', encoding='utf-8') as f:
                 json.dump(all_articles, f, indent=2)
             
             # Reload articles to update the vector store
@@ -165,4 +196,13 @@ class NewsVectorStore:
         """Clear all articles"""
         self.articles = []
         self.word_frequencies = Counter()
-        print("Cleared all articles from vector store") 
+        print("Cleared all articles from vector store")
+
+    def _update_vectors(self):
+        """Update vectors for all articles"""
+        if self.articles:
+            texts = [f"{article['title']} {article['description']}" for article in self.articles]
+            self.vectors = self.vectorizer.fit_transform(texts)
+            print(f"Updated vectors for {len(self.articles)} articles")
+        else:
+            print("No articles to update vectors") 
