@@ -57,12 +57,20 @@ def analyze_news():
         # Format the results for the frontend
         articles = []
         for article, similarity in results:
+            # Safely extract source name
+            source_name = 'Unknown'
+            if article.get('source'):
+                if isinstance(article['source'], dict):
+                    source_name = article['source'].get('name', 'Unknown')
+                else:
+                    source_name = str(article['source'])
+            
             articles.append({
-                'title': article['title'],
-                'description': article['description'],
-                'url': article['url'],
-                'source': article['source']['name'],
-                'publishedAt': article['publishedAt'],
+                'title': article.get('title', 'No Title'),
+                'description': article.get('description', 'No description available'),
+                'url': article.get('url', '#'),
+                'source': source_name,
+                'publishedAt': article.get('publishedAt', article.get('published_at', datetime.now().isoformat())),
                 'similarity': float(similarity)  # Convert numpy float to Python float
             })
             

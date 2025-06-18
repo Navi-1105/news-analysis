@@ -98,7 +98,7 @@ class NewsFetcher:
             unique_articles = list(unique_articles)
             
             # Sort by published date (newest first)
-            unique_articles.sort(key=lambda x: x['published_at'], reverse=True)
+            unique_articles.sort(key=lambda x: x['publishedAt'], reverse=True)
             
             # Save to file
             self._save_articles(unique_articles)
@@ -129,7 +129,7 @@ class NewsFetcher:
                 'description': article.get('description', ''),
                 'url': article['url'],
                 'source': article.get('source', {}).get('name', 'Unknown'),
-                'published_at': article.get('publishedAt', datetime.now().isoformat()),
+                'publishedAt': article.get('publishedAt', datetime.now().isoformat()),
                 'content': article.get('content', ''),
                 'author': article.get('author', 'Unknown')
             }
